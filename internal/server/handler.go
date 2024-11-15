@@ -9,7 +9,6 @@ func (s *Server) handleClient(conn net.Conn) {
 	defer func() {
 		conn.Close()
 		delete(s.clients, conn)
-		logging.Info("Connection closed from: " + conn.RemoteAddr().String())
 	}()
 
 	buffer := make([]byte, 1024)

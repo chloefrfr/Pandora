@@ -2,23 +2,38 @@ package functions
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
+	"io"
+	"net"
 )
+
+func ReadUnsignedByte(r io.Reader) (uint8, error) {
+	var b [1]byte
+	n, err := r.Read(b[:])
+	if err != nil {
+		return 0, err
+	}
+	if n != 1 {
+		return 0, errors.New("failed to read a single byte")
+	}
+	return b[0], nil
+}
 
 func ReadVarInt(r *bytes.Reader) (int32, error) {
 	var result int32
-	var bytesRead int
+	var shift uint
 	for {
-		if bytesRead >= 5 {
-			return 0, fmt.Errorf("VarInt is too long")
-		}
-		b, err := r.ReadByte()
+		k, err := ReadUnsignedByte(r)
 		if err != nil {
 			return 0, err
 		}
-		result |= (int32(b) & 0x7F) << (bytesRead * 7)
-		bytesRead++
-		if b&0x80 == 0 {
+
+		result |= int32(k&127) << (shift * 7)
+		shift++
+		if shift > 5 {
+			return 0, errors.New("VarInt too big")
+		}
+		if k&128 != 128 {
 			break
 		}
 	}
@@ -50,6 +65,21 @@ func ReadUnsignedShort(r *bytes.Reader) (int32, error) {
 	return (int32(b1) << 8) | int32(b2), nil
 }
 
+func WriteString(conn net.Conn, str string) error {
+	data := []byte(str)
+
+	var buffer bytes.Buffer
+
+	WriteVarInt(&buffer, int32(len(data)))
+
+	if _, err := buffer.Write(data); err != nil {
+		return err
+	}
+
+	_, err := conn.Write(buffer.Bytes())
+	return err
+}
+
 func WriteVarInt(w *bytes.Buffer, value int32) {
 	for {
 		if (value & ^0x7F) == 0 {
@@ -60,4 +90,19 @@ func WriteVarInt(w *bytes.Buffer, value int32) {
 			value >>= 7
 		}
 	}
+}
+
+func BuildPacket(id int) (*bytes.Buffer, error) {
+	var buffer bytes.Buffer
+
+	// Write the ID (VarInt)
+	WriteVarInt(&buffer, int32(id))
+
+	// Calculate the total length (packet length) and write it as a VarInt
+	// The length includes the size of the ID
+	totalLength := int32(buffer.Len()) + int32(len(buffer.Bytes()))
+	WriteVarInt(&buffer, totalLength)
+
+	// Return the buffer containing the packet
+	return &buffer, nil
 }
