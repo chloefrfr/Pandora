@@ -1,6 +1,7 @@
 package server
 
 import (
+	"io"
 	"net"
 )
 
@@ -15,6 +16,9 @@ func (s *Server) handleClient(conn net.Conn) {
 	for {
 		n, err := conn.Read(buffer)
 		if err != nil {
+			if err == io.EOF {
+				break
+			}
 			logging.Error("Error reading from client: " + err.Error())
 			break
 		}

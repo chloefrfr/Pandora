@@ -1,7 +1,9 @@
 package server
 
 import (
+	"bytes"
 	"net"
+	"pandora/internal/functions"
 	"pandora/logger"
 )
 
@@ -10,6 +12,7 @@ var logging = logger.New()
 type Server struct {
 	address string
 	clients map[net.Conn]bool
+	Conn    net.Conn
 }
 
 func NewServer(address string) *Server {
@@ -37,6 +40,21 @@ func (s *Server) Start() error {
 
 		logging.Info("New connection from: " + conn.RemoteAddr().String())
 		s.clients[conn] = true
+		s.Conn = conn
 		go s.handleClient(conn)
+	}
+}
+
+func (s *Server) SendStatusResponse(response string) {
+	var buffer bytes.Buffer
+
+	functions.WriteVarInt(&buffer, int32(PacketStatusResponse))
+	functions.WriteVarInt(&buffer, int32(len(response)))
+
+	buffer.WriteString(response)
+
+	_, err := s.Conn.Write(buffer.Bytes())
+	if err != nil {
+		logging.Error("Error sending status response: " + err.Error())
 	}
 }
