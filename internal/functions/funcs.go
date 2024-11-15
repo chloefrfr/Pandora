@@ -95,14 +95,10 @@ func WriteVarInt(w *bytes.Buffer, value int32) {
 func BuildPacket(id int) (*bytes.Buffer, error) {
 	var buffer bytes.Buffer
 
-	// Write the ID (VarInt)
 	WriteVarInt(&buffer, int32(id))
 
-	// Calculate the total length (packet length) and write it as a VarInt
-	// The length includes the size of the ID
 	totalLength := int32(buffer.Len()) + int32(len(buffer.Bytes()))
 	WriteVarInt(&buffer, totalLength)
 
-	// Return the buffer containing the packet
 	return &buffer, nil
 }

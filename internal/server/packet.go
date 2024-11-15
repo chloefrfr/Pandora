@@ -108,7 +108,6 @@ func (s *Server) handlePackets(data []byte) {
 			}
 
 		case PacketStatusRequest:
-			logging.Debug("State: " + fmt.Sprintf("%d", s.state))
 			switch s.state {
 			case 1:
 				// TODO
