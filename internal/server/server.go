@@ -37,6 +37,5 @@ func (s *Server) Start() error {
 
 		logging.Info("New connection from: " + conn.RemoteAddr().String())
 		s.clients[conn] = true
-
 	}
 }
