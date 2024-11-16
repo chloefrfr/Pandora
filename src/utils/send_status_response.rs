@@ -7,15 +7,11 @@ use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
 
 use crate::packet::manager::PacketManager;
 
-pub async fn send_status_response(
-    socket: &Arc<Mutex<TcpStream>>,
-    proto_version: i32,
-    max_players: u32,
-) {
+pub async fn send_status_response(socket: &Arc<Mutex<TcpStream>>, max_players: u32) {
     let response_data = json!({
         "version": {
-            "name": "1.21.3",
-            "protocol": proto_version,
+            "name": "1.16.5",
+            "protocol": 754,
         },
         "players": {
             "max": max_players,

@@ -1,5 +1,7 @@
 use bytes::{Buf, BufMut, BytesMut};
-use log::warn;
+use nbt::Blob;
+use serde::Serialize;
+use serde_json::Serializer;
 
 pub struct PacketManager {
     buffer: BytesMut,
@@ -9,56 +11,102 @@ pub struct PacketManager {
 impl PacketManager {
     #[inline]
     pub fn new(buffer: BytesMut, offset: usize) -> Self {
-        if buffer.is_empty() {}
         Self { buffer, offset }
     }
 
     #[inline(always)]
-    fn check_remaining(&self, required: usize) {
-        if self.buffer.remaining() < required {
-            warn!("Buffer underflow: Tried to read {} bytes, but only {} bytes available. Current offset: {}", required, self.buffer.remaining(), self.offset);
-        }
+    fn ensure_available_bytes(&self, required: usize) -> bool {
+        self.buffer.remaining() >= required
     }
 
     #[inline(always)]
     pub fn read_boolean(&mut self) -> bool {
-        self.read_byte() != 0
+        if self.ensure_available_bytes(1) {
+            self.read_byte() != 0
+        } else {
+            false
+        }
+    }
+
+    pub fn read_var_int_checked(&mut self) -> Option<i32> {
+        let mut value = 0;
+        let mut shift = 0;
+
+        for _ in 0..5 {
+            if self.ensure_available_bytes(1) {
+                let byte = self.read_unsigned_byte();
+                value |= ((byte & 0x7F) as i32) << shift;
+                if (byte & 0x80) == 0 {
+                    return Some(value);
+                }
+                shift += 7;
+            } else {
+                return None;
+            }
+        }
+        None
     }
 
     #[inline(always)]
     pub fn read_byte(&mut self) -> i8 {
-        self.check_remaining(1);
-        self.buffer.get_i8()
+        if self.ensure_available_bytes(1) {
+            self.buffer.get_i8()
+        } else {
+            0
+        }
+    }
+
+    pub fn read_float(&mut self) -> f32 {
+        if self.ensure_available_bytes(4) {
+            self.buffer.get_f32()
+        } else {
+            0.0
+        }
     }
 
     #[inline(always)]
     pub fn read_unsigned_byte(&mut self) -> u8 {
-        self.check_remaining(1);
-        self.buffer.get_u8()
+        if self.ensure_available_bytes(1) {
+            self.buffer.get_u8()
+        } else {
+            0
+        }
     }
 
     #[inline(always)]
     pub fn read_short(&mut self) -> i16 {
-        self.check_remaining(2);
-        self.buffer.get_i16()
+        if self.ensure_available_bytes(2) {
+            self.buffer.get_i16()
+        } else {
+            0
+        }
     }
 
     #[inline(always)]
     pub fn read_unsigned_short(&mut self) -> u16 {
-        self.check_remaining(2);
-        self.buffer.get_u16()
+        if self.ensure_available_bytes(2) {
+            self.buffer.get_u16()
+        } else {
+            0
+        }
     }
 
     #[inline(always)]
     pub fn read_int(&mut self) -> i32 {
-        self.check_remaining(4);
-        self.buffer.get_i32()
+        if self.ensure_available_bytes(4) {
+            self.buffer.get_i32()
+        } else {
+            0
+        }
     }
 
     #[inline(always)]
     pub fn read_long(&mut self) -> i64 {
-        self.check_remaining(8);
-        self.buffer.get_i64()
+        if self.ensure_available_bytes(8) {
+            self.buffer.get_i64()
+        } else {
+            0
+        }
     }
 
     pub fn read_var_int(&mut self) -> i32 {
@@ -66,40 +114,44 @@ impl PacketManager {
         let mut shift = 0;
 
         for _ in 0..5 {
-            self.check_remaining(1);
-            let byte = self.read_unsigned_byte();
-            value |= ((byte & 0x7F) as i32) << shift;
-            if (byte & 0x80) == 0 {
-                return value;
+            if self.ensure_available_bytes(1) {
+                let byte = self.read_unsigned_byte();
+                value |= ((byte & 0x7F) as i32) << shift;
+                if (byte & 0x80) == 0 {
+                    return value;
+                }
+                shift += 7;
+            } else {
+                return 0;
             }
-            shift += 7;
         }
-        warn!("VarInt too big");
         0
     }
 
-    pub fn read_var_long(&mut self) -> i64 {
-        let mut value = 0;
-        let mut shift = 0;
+    pub fn append_blob(&mut self, blob: &Blob) {
+        let mut serialized_blob = Vec::new();
+        blob.to_writer(&mut serialized_blob).unwrap();
 
-        for _ in 0..10 {
-            self.check_remaining(1);
-            let byte = self.read_unsigned_byte();
-            value |= ((byte & 0x7F) as i64) << shift;
-            if (byte & 0x80) == 0 {
-                return value;
-            }
-            shift += 7;
+        let byte_buffer = BytesMut::from(&serialized_blob[..]);
+        self.append(&byte_buffer);
+    }
+
+    pub fn read_double(&mut self) -> f64 {
+        if self.ensure_available_bytes(8) {
+            self.buffer.get_f64()
+        } else {
+            0.0
         }
-        warn!("VarLong too big");
-        0
     }
 
     pub fn read_string(&mut self) -> String {
         let length = self.read_var_int() as usize;
-        self.check_remaining(length);
-        let slice = self.buffer.split_to(length);
-        String::from_utf8(slice.to_vec()).expect("Invalid UTF-8 sequence")
+        if self.ensure_available_bytes(length) {
+            let slice = self.buffer.split_to(length);
+            String::from_utf8(slice.to_vec()).unwrap_or_default()
+        } else {
+            String::new()
+        }
     }
 
     pub fn read_uuid(&mut self) -> String {
@@ -131,6 +183,16 @@ impl PacketManager {
     #[inline(always)]
     pub fn write_unsigned_short(&mut self, value: u16) {
         self.buffer.put_u16(value);
+    }
+
+    #[inline(always)]
+    pub fn write_double(&mut self, value: f64) {
+        self.buffer.put_f64(value);
+    }
+
+    #[inline(always)]
+    pub fn write_float(&mut self, value: f32) {
+        self.buffer.put_f32(value);
     }
 
     #[inline(always)]
@@ -166,10 +228,10 @@ impl PacketManager {
 
     pub fn write_uuid(&mut self, value: &str) {
         let uuid = value.replace("-", "");
-        let high = i64::from_str_radix(&uuid[..16], 16).expect("Invalid UUID format");
-        let low = i64::from_str_radix(&uuid[16..], 16).expect("Invalid UUID format");
-        self.write_long(high);
-        self.write_long(low);
+        let high = u128::from_str_radix(&uuid[..16], 16).expect("Invalid UUID format");
+        let low = u128::from_str_radix(&uuid[16..], 16).expect("Invalid UUID format");
+        self.write_long(high as i64);
+        self.write_long(low as i64);
     }
 
     pub fn add_offset(&mut self, size: usize, retval: bool) -> usize {
@@ -187,6 +249,7 @@ impl PacketManager {
     pub fn build_packet(&mut self, id: i32) -> BytesMut {
         let mut pk_id = PacketManager::new(BytesMut::new(), 0);
         pk_id.write_var_int(id);
+
         let mut pk_length = PacketManager::new(BytesMut::new(), 0);
         pk_length.write_var_int(pk_id.buffer.len() as i32 + self.buffer.len() as i32);
 
@@ -201,6 +264,11 @@ impl PacketManager {
 
     pub fn append(&mut self, data: &BytesMut) {
         self.buffer.extend(data);
+        self.add_offset(data.len(), true);
+    }
+
+    pub fn extend_from_slice(&mut self, data: &[u8]) {
+        self.buffer.extend_from_slice(data);
         self.add_offset(data.len(), true);
     }
 
