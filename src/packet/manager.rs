@@ -1,11 +1,22 @@
+use std::sync::Arc;
+
 use bytes::{Buf, BufMut, BytesMut};
 use nbt::Blob;
-use serde::Serialize;
-use serde_json::Serializer;
+use tokio::{net::TcpStream, sync::Mutex};
 
 pub struct PacketManager {
     buffer: BytesMut,
     offset: usize,
+}
+
+#[async_trait::async_trait]
+pub trait PacketHandler {
+    async fn handle(
+        &self,
+        packet: &mut PacketManager,
+        socket: Arc<Mutex<TcpStream>>,
+        state: &mut i32,
+    ) -> Result<(), String>;
 }
 
 impl PacketManager {

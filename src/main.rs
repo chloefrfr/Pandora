@@ -1,5 +1,6 @@
 use log::{error, info};
 use networking::server::start_server;
+pub mod chunks;
 pub mod config;
 pub mod logger;
 pub mod networking;

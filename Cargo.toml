@@ -11,3 +11,4 @@ serde = { version = "1.0.136", features = ["derive"] }
 simple_logger = "5.0.0"
 log = "0.4.17"
 hematite-nbt = { git = "https://github.com/PistonDevelopers/hematite_nbt" }
+async-trait = "0.1.58"
