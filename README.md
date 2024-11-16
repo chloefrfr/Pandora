@@ -20,5 +20,5 @@ cargo build --release
 3. Run the server
 
 ```bash
-target/release/pandora
+.\target\release\pandora.exe
 ```
