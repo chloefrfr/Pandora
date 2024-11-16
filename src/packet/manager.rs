@@ -1,5 +1,5 @@
 use bytes::{Buf, BufMut, BytesMut};
-use std::convert::TryInto;
+use log::warn;
 
 pub struct PacketManager {
     buffer: BytesMut,
@@ -7,136 +7,140 @@ pub struct PacketManager {
 }
 
 impl PacketManager {
+    #[inline]
     pub fn new(buffer: BytesMut, offset: usize) -> Self {
+        if buffer.is_empty() {}
         Self { buffer, offset }
     }
 
+    #[inline(always)]
+    fn check_remaining(&self, required: usize) {
+        if self.buffer.remaining() < required {
+            warn!("Buffer underflow: Tried to read {} bytes, but only {} bytes available. Current offset: {}", required, self.buffer.remaining(), self.offset);
+        }
+    }
+
+    #[inline(always)]
     pub fn read_boolean(&mut self) -> bool {
         self.read_byte() != 0
     }
 
+    #[inline(always)]
     pub fn read_byte(&mut self) -> i8 {
+        self.check_remaining(1);
         self.buffer.get_i8()
     }
 
+    #[inline(always)]
     pub fn read_unsigned_byte(&mut self) -> u8 {
+        self.check_remaining(1);
         self.buffer.get_u8()
     }
 
+    #[inline(always)]
     pub fn read_short(&mut self) -> i16 {
+        self.check_remaining(2);
         self.buffer.get_i16()
     }
 
+    #[inline(always)]
     pub fn read_unsigned_short(&mut self) -> u16 {
+        self.check_remaining(2);
         self.buffer.get_u16()
     }
 
+    #[inline(always)]
     pub fn read_int(&mut self) -> i32 {
+        self.check_remaining(4);
         self.buffer.get_i32()
     }
 
+    #[inline(always)]
     pub fn read_long(&mut self) -> i64 {
+        self.check_remaining(8);
         self.buffer.get_i64()
-    }
-
-    pub fn read_unsigned_long(&mut self) -> u64 {
-        self.buffer.get_u64()
-    }
-
-    pub fn read_float(&mut self) -> f32 {
-        self.buffer.get_f32()
-    }
-
-    pub fn read_double(&mut self) -> f64 {
-        self.buffer.get_f64()
-    }
-
-    pub fn read_string(&mut self) -> String {
-        let length = self.read_var_int();
-        let slice = self.buffer.split_to(length as usize);
-        String::from_utf8(slice.to_vec()).expect("Invalid UTF-8 sequence")
     }
 
     pub fn read_var_int(&mut self) -> i32 {
         let mut value = 0;
         let mut shift = 0;
 
-        loop {
+        for _ in 0..5 {
+            self.check_remaining(1);
             let byte = self.read_unsigned_byte();
             value |= ((byte & 0x7F) as i32) << shift;
-            if shift >= 28 {
-                panic!("VarInt too big");
-            }
             if (byte & 0x80) == 0 {
-                break;
+                return value;
             }
             shift += 7;
         }
-        value
+        warn!("VarInt too big");
+        0
     }
 
     pub fn read_var_long(&mut self) -> i64 {
         let mut value = 0;
         let mut shift = 0;
 
-        loop {
+        for _ in 0..10 {
+            self.check_remaining(1);
             let byte = self.read_unsigned_byte();
             value |= ((byte & 0x7F) as i64) << shift;
-            if shift >= 70 {
-                panic!("VarLong too big");
-            }
             if (byte & 0x80) == 0 {
-                break;
+                return value;
             }
             shift += 7;
         }
-        value
+        warn!("VarLong too big");
+        0
+    }
+
+    pub fn read_string(&mut self) -> String {
+        let length = self.read_var_int() as usize;
+        self.check_remaining(length);
+        let slice = self.buffer.split_to(length);
+        String::from_utf8(slice.to_vec()).expect("Invalid UTF-8 sequence")
     }
 
     pub fn read_uuid(&mut self) -> String {
         let high = self.read_long();
         let low = self.read_long();
-        format!("{:x}{:x}", high, low)
+        format!("{:016x}{:016x}", high, low)
     }
 
+    #[inline(always)]
     pub fn write_boolean(&mut self, value: bool) {
         self.write_byte(if value { 1 } else { 0 });
     }
 
+    #[inline(always)]
     pub fn write_byte(&mut self, value: i8) {
         self.buffer.put_i8(value);
     }
 
+    #[inline(always)]
     pub fn write_unsigned_byte(&mut self, value: u8) {
         self.buffer.put_u8(value);
     }
 
+    #[inline(always)]
     pub fn write_short(&mut self, value: i16) {
         self.buffer.put_i16(value);
     }
 
+    #[inline(always)]
     pub fn write_unsigned_short(&mut self, value: u16) {
         self.buffer.put_u16(value);
     }
 
+    #[inline(always)]
     pub fn write_int(&mut self, value: i32) {
         self.buffer.put_i32(value);
     }
 
+    #[inline(always)]
     pub fn write_long(&mut self, value: i64) {
         self.buffer.put_i64(value);
-    }
-
-    pub fn write_unsigned_long(&mut self, value: u64) {
-        self.buffer.put_u64(value);
-    }
-
-    pub fn write_float(&mut self, value: f32) {
-        self.buffer.put_f32(value);
-    }
-
-    pub fn write_double(&mut self, value: f64) {
-        self.buffer.put_f64(value);
     }
 
     pub fn write_string(&mut self, value: &str) {
@@ -162,8 +166,8 @@ impl PacketManager {
 
     pub fn write_uuid(&mut self, value: &str) {
         let uuid = value.replace("-", "");
-        let high = i64::from_str_radix(&uuid[0..16], 16).expect("Invalid UUID format");
-        let low = i64::from_str_radix(&uuid[16..32], 16).expect("Invalid UUID format");
+        let high = i64::from_str_radix(&uuid[..16], 16).expect("Invalid UUID format");
+        let low = i64::from_str_radix(&uuid[16..], 16).expect("Invalid UUID format");
         self.write_long(high);
         self.write_long(low);
     }
@@ -179,12 +183,16 @@ impl PacketManager {
         }
     }
 
+    #[inline(always)]
     pub fn build_packet(&mut self, id: i32) -> BytesMut {
         let mut pk_id = PacketManager::new(BytesMut::new(), 0);
         pk_id.write_var_int(id);
         let mut pk_length = PacketManager::new(BytesMut::new(), 0);
         pk_length.write_var_int(pk_id.buffer.len() as i32 + self.buffer.len() as i32);
-        let mut pk = BytesMut::new();
+
+        let mut pk = BytesMut::with_capacity(
+            pk_length.buffer.len() + pk_id.buffer.len() + self.buffer.len(),
+        );
         pk.extend_from_slice(&pk_length.buffer);
         pk.extend_from_slice(&pk_id.buffer);
         pk.extend_from_slice(&self.buffer);

@@ -2,9 +2,8 @@ use std::sync::Arc;
 
 use crate::config::Config;
 use crate::networking::connection::handle_connection;
-use log::{error, info};
+use log::info;
 use tokio::net::TcpListener;
-use tokio::spawn;
 use tokio::sync::Mutex;
 
 pub async fn start_server(config: &Config) -> Result<(), Box<dyn std::error::Error>> {

@@ -1,16 +1,11 @@
 use log::{error, info};
 use networking::server::start_server;
-use simple_logger::SimpleLogger;
-use std::net::SocketAddr;
-use std::sync::Arc;
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::Mutex;
-
 pub mod config;
 pub mod logger;
 pub mod networking;
 pub mod packet;
 pub mod packets;
+pub mod utils;
 
 #[tokio::main]
 async fn main() {
