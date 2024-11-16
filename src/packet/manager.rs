@@ -129,11 +129,11 @@ impl PacketManager {
     }
 
     pub fn append_blob(&mut self, blob: &Blob) {
-        let mut serialized_blob = Vec::new();
-        blob.to_writer(&mut serialized_blob).unwrap();
+        let serialized_blob = serde_json::to_vec(blob).unwrap();
+        let length = serialized_blob.len();
 
-        let byte_buffer = BytesMut::from(&serialized_blob[..]);
-        self.append(&byte_buffer);
+        self.buffer.extend_from_slice(&serialized_blob);
+        self.add_offset(length, true);
     }
 
     pub fn read_double(&mut self) -> f64 {

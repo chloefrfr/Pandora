@@ -87,7 +87,7 @@ pub async fn handle_connection(
                                 let val =
                                     read_file::read_file("./NBT/dimension_codec.nbt").unwrap();
 
-                                println!("{:?}", val);
+                                // println!("{:?}", val);
 
                                 join_game.append_blob(&val);
 
@@ -107,40 +107,40 @@ pub async fn handle_connection(
                                     .await
                                     .unwrap();
 
-                                let chunk_path = Path::new("./NBT/chunk.nbt");
+                                // let chunk_path = Path::new("./NBT/chunk.nbt");
 
-                                for x in -8..8 {
-                                    for z in -8..8 {
-                                        let mut file = File::open(chunk_path).await.unwrap();
-                                        let mut chunk_data = Vec::new();
-                                        file.read_to_end(&mut chunk_data).await.unwrap();
+                                // for x in -8..8 {
+                                //     for z in -8..8 {
+                                //         let mut file = File::open(chunk_path).await.unwrap();
+                                //         let mut chunk_data = Vec::new();
+                                //         file.read_to_end(&mut chunk_data).await.unwrap();
 
-                                        let mut chunk =
-                                            PacketManager::new(BytesMut::from(&chunk_data[..]), 0);
-                                        let mut chunk_data_packet =
-                                            PacketManager::new(BytesMut::new(), 0);
+                                //         let mut chunk =
+                                //             PacketManager::new(BytesMut::from(&chunk_data[..]), 0);
+                                //         let mut chunk_data_packet =
+                                //             PacketManager::new(BytesMut::new(), 0);
 
-                                        chunk_data_packet
-                                            .append(&BytesMut::from(&(x as i32).to_be_bytes()[..]));
-                                        chunk_data_packet
-                                            .append(&BytesMut::from(&(z as i32).to_be_bytes()[..]));
-                                        chunk.read_var_int();
-                                        chunk.read_var_int();
-                                        chunk.read_int();
-                                        chunk.read_int();
+                                //         chunk_data_packet
+                                //             .append(&BytesMut::from(&(x as i32).to_be_bytes()[..]));
+                                //         chunk_data_packet
+                                //             .append(&BytesMut::from(&(z as i32).to_be_bytes()[..]));
+                                //         chunk.read_var_int();
+                                //         chunk.read_var_int();
+                                //         chunk.read_int();
+                                //         chunk.read_int();
 
-                                        chunk_data_packet.extend_from_slice(
-                                            &chunk.get_buffer()[chunk.get_offset()..],
-                                        );
+                                //         chunk_data_packet.extend_from_slice(
+                                //             &chunk.get_buffer()[chunk.get_offset()..],
+                                //         );
 
-                                        socket
-                                            .lock()
-                                            .await
-                                            .write_all(&chunk_data_packet.build_packet(0x20))
-                                            .await
-                                            .unwrap();
-                                    }
-                                }
+                                //         socket
+                                //             .lock()
+                                //             .await
+                                //             .write_all(&chunk_data_packet.build_packet(0x20))
+                                //             .await
+                                //             .unwrap();
+                                //     }
+                                // }
 
                                 let mut player_pos_and_look =
                                     PacketManager::new(BytesMut::new(), 0);
