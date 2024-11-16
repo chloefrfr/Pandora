@@ -1,10 +1,6 @@
 # Pandora
 
-Pandora is a Minecraft server implementation written in Go
-
-### Prerequisites
-
-Go 1.23 or later
+Pandora is a Minecraft server implementation written in Rust
 
 ### Installation
 
@@ -18,11 +14,11 @@ cd pandora
 2. Build the project:
 
 ```bash
-go build -o pandora.exe ./cmd/pandora
+cargo build --release
 ```
 
 3. Run the server
 
 ```bash
-./pandora
+target/release/pandora
 ```

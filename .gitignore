@@ -1,2 +1,2 @@
-config.toml*
-pandora.exe*
+target/
+config.json*

@@ -1,0 +1,12 @@
+[package]
+name = "pandora"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+bytes = "1.1.0"
+serde_json = "1.0.81"
+serde = { version = "1.0.136", features = ["derive"] }
+simple_logger = "5.0.0"
+log = "0.4.17"
