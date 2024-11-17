@@ -1,6 +1,17 @@
 # Pandora
 
-Pandora is a Minecraft server implementation written in Rust
+Pandora is high performance minecraft server implementation written in Rust
+
+## Getting Started
+
+Follow the steps below to get started with Pandora.
+
+### Prerequisites
+
+Ensure you have the following installed:
+
+- [Rust](https://www.rust-lang.org/tools/install)
+- [Git](https://git-scm.com/downloads)
 
 ### Installation
 
@@ -20,5 +31,5 @@ cargo build --release
 3. Run the server
 
 ```bash
-.\target\release\pandora.exe
+./target/release/pandora
 ```
