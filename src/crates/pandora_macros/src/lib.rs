@@ -5,32 +5,46 @@ use quote::quote;
 use syn::{parse_macro_input, DeriveInput};
 
 #[proc_macro_derive(Decode)]
-pub fn decode_derive(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
-    let mut field_statements = Vec::new();
+pub fn derive_decode(input: TokenStream) -> TokenStream {
+    let parsed_input = parse_macro_input!(input as DeriveInput);
+
+    let mut field_assignments = Vec::new();
+
     if let syn::Data::Struct(syn::DataStruct {
         fields: syn::Fields::Named(fields),
         ..
-    }) = input.data
+    }) = parsed_input.data
     {
         for field in fields.named {
-            let ident = field.ident.unwrap();
-            let statement = quote! {
-                println("Failed to decode field: {}", stringify!(#ident));
+            let field_name = field.ident.unwrap();
+            let field_type = &field.ty;
+
+            let assignment = quote! {
+                #field_name: #field_type::decode(bytes)?,
             };
-            field_statements.push(statement);
+            field_assignments.push(assignment);
         }
+    } else {
+        return quote! {
+            compile_error!("Decode can only be derived for structs with named fields.");
+        }
+        .into();
     }
-    let name = input.ident;
+
+    let struct_name = parsed_input.ident;
+
     let expanded = quote! {
-        impl #name {
-            pub fn decode(bytes: &mut impl Into<Vec<u8>>) -> Self {
-                #(#field_statements)*
-
-                Self::default()
-
+        impl #struct_name {
+            pub fn decode<R>(bytes: &mut R) -> Result<Self, Box<dyn std::error::Error>>
+            where
+                R: Read,
+            {
+                Ok(Self {
+                    #(#field_assignments)*
+                })
             }
         }
     };
+
     TokenStream::from(expanded)
 }
