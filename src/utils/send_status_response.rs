@@ -2,10 +2,9 @@ use std::sync::Arc;
 
 use bytes::BytesMut;
 use log::error;
+use packet_manager::PacketManager;
 use serde_json::json;
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex};
-
-use crate::packet::manager::PacketManager;
 
 pub async fn send_status_response(socket: &Arc<Mutex<TcpStream>>, max_players: u32) {
     let response_data = json!({

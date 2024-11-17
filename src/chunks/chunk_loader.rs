@@ -1,4 +1,5 @@
 use bytes::BytesMut;
+use packet_manager::PacketManager;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -24,9 +25,8 @@ impl ChunkLoader {
             .await
             .map_err(|e| format!("Failed to read chunk data: {}", e))?;
 
-        let mut chunk: crate::packet::manager::PacketManager =
-            crate::packet::manager::PacketManager::new(BytesMut::from(&chunk_data[..]), 0);
-        let mut chunk_data_packet = crate::packet::manager::PacketManager::new(BytesMut::new(), 0);
+        let mut chunk: PacketManager = PacketManager::new(BytesMut::from(&chunk_data[..]), 0);
+        let mut chunk_data_packet = PacketManager::new(BytesMut::new(), 0);
 
         chunk_data_packet.append(&BytesMut::from(&(x as i32).to_be_bytes()[..]));
         chunk_data_packet.append(&BytesMut::from(&(z as i32).to_be_bytes()[..]));

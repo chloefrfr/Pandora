@@ -7,9 +7,9 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 
 use crate::chunks::chunk_loader::ChunkLoader;
-use crate::packet::manager::PacketHandler;
 use crate::utils::send_player_position::send_player_position;
 use crate::utils::send_success_response::send_success_response;
+use packet_manager::{PacketHandler, PacketManager};
 
 pub struct PlayerJoinPacket;
 
@@ -27,7 +27,7 @@ const KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(10);
 impl PacketHandler for PlayerJoinPacket {
     async fn handle(
         &self,
-        packet: &mut crate::packet::manager::PacketManager,
+        packet: &mut PacketManager,
         socket: Arc<Mutex<tokio::net::TcpStream>>,
         _state: &mut i32,
     ) -> Result<(), String> {
@@ -35,7 +35,7 @@ impl PacketHandler for PlayerJoinPacket {
 
         send_success_response(socket_clone, packet).await.unwrap();
 
-        let mut join_game = crate::packet::manager::PacketManager::new(BytesMut::new(), 0);
+        let mut join_game = PacketManager::new(BytesMut::new(), 0);
         join_game.write_int(0);
         join_game.write_boolean(true);
         join_game.write_unsigned_byte(1);
@@ -77,7 +77,7 @@ impl PacketHandler for PlayerJoinPacket {
         let mut interval = tokio::time::interval(KEEP_ALIVE_INTERVAL);
         loop {
             interval.tick().await;
-            let mut keep_alive = crate::packet::manager::PacketManager::new(BytesMut::new(), 0);
+            let mut keep_alive = PacketManager::new(BytesMut::new(), 0);
             keep_alive.write_long(BigInt::zero());
             {
                 let mut socket_guard = socket.lock().await;

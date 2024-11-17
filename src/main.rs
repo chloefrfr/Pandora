@@ -5,7 +5,6 @@ pub mod config;
 pub mod constants;
 pub mod logger;
 pub mod networking;
-pub mod packet;
 pub mod packets;
 pub mod utils;
 

@@ -1,5 +1,5 @@
-use crate::packet::manager::PacketManager;
 use bytes::BytesMut;
+use packet_manager::PacketManager;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 
