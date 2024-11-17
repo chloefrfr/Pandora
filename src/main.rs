@@ -1,5 +1,7 @@
 use log::{error, info};
 use networking::server::start_server;
+use std::time::Instant;
+
 pub mod chunks;
 pub mod config;
 pub mod constants;
@@ -14,7 +16,10 @@ async fn main() {
 
     info!("Starting Pandora");
 
+    let start_time = Instant::now();
     let config = config::Config::load_config();
+    let duration = start_time.elapsed();
+    info!("Config loaded in {:?}", duration);
 
     if let Err(e) = start_server(&config).await {
         error!("Failed to start server: {}", e);
