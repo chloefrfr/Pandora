@@ -17,3 +17,4 @@ aes = "0.8.4"
 flate2 = "1.0.25"
 num-bigint = "0.4"
 num-traits = "0.2"
+pandoranet = { path = "src/crates/pandoranet" }
