@@ -29,7 +29,7 @@ impl Connection {
         id: u32,
         player_uuid: Option<Uuid>,
     ) -> (Self, mpsc::Sender<Vec<u8>>) {
-        let (send_tx, send_rx) = mpsc::channel(1024);
+        let (send_tx, _send_rx) = mpsc::channel(1024);
         let (recv_tx, recv_rx) = mpsc::channel(1024);
 
         (
@@ -56,9 +56,18 @@ impl Connection {
     }
 }
 
+pub enum ConnectionState {
+    Unknown,
+    Handshake,
+    Status,
+    Login,
+    Play,
+}
+
 pub struct ConnectionManager {
     pub connections: DashMap<u32, Connection>,
     pub connection_count: AtomicU32,
+    pub state: ConnectionState,
 }
 
 impl ConnectionManager {
@@ -66,6 +75,7 @@ impl ConnectionManager {
         Self {
             connections: DashMap::new(),
             connection_count: AtomicU32::new(0),
+            state: ConnectionState::Unknown,
         }
     }
 
@@ -92,7 +102,7 @@ impl ConnectionManager {
 
 pub async fn handle_connection(socket: TcpStream) -> Result<(), Box<dyn std::error::Error>> {
     let id = CONNECTION_MANAGER.generate_id();
-    let (connection, send_queue) = Connection::new(socket, id, None);
+    let (connection, _send_queue) = Connection::new(socket, id, None);
 
     CONNECTION_MANAGER.add_connection(connection);
 
