@@ -17,8 +17,8 @@ impl PlayerJoinPacket {
     }
 }
 
-const DIMENSION_CODEC_PATH: &str = "./NBT/dimension_codec.nbt";
-const CHUNK_PATH: &str = "./NBT/chunk.nbt";
+const DIMENSION_CODEC_PATH: &str = "./assets/dimension_codec.nbt";
+const CHUNK_PATH: &str = "./assets/chunk.nbt";
 const KEEP_ALIVE_INTERVAL: Duration = Duration::from_secs(10);
 
 #[async_trait::async_trait]
