@@ -40,6 +40,8 @@ impl PacketHandler for PlayerJoinPacket {
         join_game.write_byte(-1);
         join_game.write_var_int(3);
         join_game.write_string("minecraft:overworld");
+        join_game.write_string("minecraft:the_nether");
+        join_game.write_string("minecraft:the_end");
 
         let val = crate::utils::read_file::read_file(DIMENSION_CODEC_PATH).unwrap();
         join_game.append_blob(&val);
