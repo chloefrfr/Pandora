@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use bytes::{Buf, BufMut, BytesMut};
+use log::error;
 use nbt::Blob;
+use num_bigint::BigInt;
+use num_traits::ToPrimitive;
 use tokio::{net::TcpStream, sync::Mutex};
 
 pub struct PacketManager {
@@ -212,8 +215,12 @@ impl PacketManager {
     }
 
     #[inline(always)]
-    pub fn write_long(&mut self, value: i64) {
-        self.buffer.put_i64(value);
+    pub fn write_long(&mut self, value: BigInt) {
+        if let Some(val) = value.to_i64() {
+            self.buffer.put_i64(val);
+        } else {
+            error!("Failed to convert BigInt to i64");
+        }
     }
 
     pub fn write_string(&mut self, value: &str) {
@@ -241,8 +248,8 @@ impl PacketManager {
         let uuid = value.replace("-", "");
         let high = u128::from_str_radix(&uuid[..16], 16).expect("Invalid UUID format");
         let low = u128::from_str_radix(&uuid[16..], 16).expect("Invalid UUID format");
-        self.write_long(high as i64);
-        self.write_long(low as i64);
+        self.write_long((high as i64).into());
+        self.write_long((low as i64).into());
     }
 
     pub fn add_offset(&mut self, size: usize, retval: bool) -> usize {

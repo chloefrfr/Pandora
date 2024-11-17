@@ -1,4 +1,6 @@
 use bytes::BytesMut;
+use num_bigint::BigInt;
+use num_traits::Zero;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
@@ -47,9 +49,9 @@ impl PacketHandler for PlayerJoinPacket {
         join_game.append_blob(&val);
 
         join_game.write_string("minecraft:overworld");
-        join_game.write_long(1);
-        join_game.write_long(10);
-        join_game.write_long(10);
+        join_game.write_long(BigInt::from(0));
+        join_game.write_var_int(10);
+        join_game.write_var_int(10);
         join_game.write_boolean(false);
         join_game.write_boolean(true);
         join_game.write_boolean(false);
@@ -76,7 +78,7 @@ impl PacketHandler for PlayerJoinPacket {
         loop {
             interval.tick().await;
             let mut keep_alive = crate::packet::manager::PacketManager::new(BytesMut::new(), 0);
-            keep_alive.write_long(0);
+            keep_alive.write_long(BigInt::zero());
             {
                 let mut socket_guard = socket.lock().await;
                 socket_guard
