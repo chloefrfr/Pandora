@@ -1,5 +1,5 @@
 use crate::{
-    config,
+    config, constants,
     packet::manager::{PacketHandler, PacketManager},
     packets::{handshake, player_join, pong::handle_pong},
     utils::send_status_response::send_status_response,
@@ -16,12 +16,14 @@ pub async fn handle_connection(
 ) {
     let config = config::Config::load_config();
     let socket = Arc::new(Mutex::new(socket));
+
     {
-        connections.lock().await.push(socket.clone());
+        let mut connections_guard = connections.lock().await;
+        connections_guard.push(socket.clone());
     }
 
     let mut state = 0;
-    let mut buffer: BytesMut = BytesMut::new();
+    let mut buffer = BytesMut::new();
 
     loop {
         let mut data = vec![0; 1024];
@@ -42,12 +44,14 @@ pub async fn handle_connection(
                     let packet_id = packet.read_var_int();
 
                     match packet_id as i32 {
-                        0x00 => match state {
+                        constants::HANDSHAKE_PACKET => match state {
                             0 => {
                                 handshake::HandshakePacket
                                     .handle(&mut packet, socket.clone(), &mut state)
                                     .await
-                                    .unwrap();
+                                    .unwrap_or_else(|err| {
+                                        error!("Failed to handle handshake packet: {}", err);
+                                    });
                             }
                             1 => {
                                 send_status_response(&socket, config.max_players).await;
@@ -56,21 +60,21 @@ pub async fn handle_connection(
                                 player_join::PlayerJoinPacket
                                     .handle(&mut packet, socket.clone(), &mut state)
                                     .await
-                                    .unwrap();
+                                    .unwrap_or_else(|err| {
+                                        error!("Failed to handle player join packet: {}", err);
+                                    });
                             }
-                            _ => error!("Unrecognized state: {}", state),
+                            _ => {}
                         },
-                        0x01 if state == 1 => {
+                        constants::PONG_PACKET if state == 1 => {
                             let mut socket_guard = socket.lock().await;
-                            handle_pong(&mut buffer, &mut socket_guard).await;
+                            handle_pong(&mut buffer, &mut socket_guard).await
                         }
-                        0x03 => {
+                        constants::CHAT_MESSAGE_PACKET => {
                             let message = packet.read_string();
                             info!("Received chat message: {}", message);
                         }
-                        _ => {
-                            error!("Unknown Packet ID: {}", packet_id);
-                        }
+                        _ => {}
                     }
                 }
             }
@@ -79,5 +83,10 @@ pub async fn handle_connection(
                 break;
             }
         }
+    }
+
+    {
+        let mut connections_guard = connections.lock().await;
+        connections_guard.retain(|conn| !Arc::ptr_eq(conn, &socket));
     }
 }
