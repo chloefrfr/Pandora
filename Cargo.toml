@@ -21,3 +21,4 @@ num-traits = "0.2"
 # Custom crates
 pandoranet = { path = "src/crates/pandoranet" }
 packet_manager = { path = "src/crates/packet_manager" }
+pandora_macros = { path = "src/crates/pandora_macros" }

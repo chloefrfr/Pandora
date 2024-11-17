@@ -393,11 +393,22 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "packet_manager",
+ "pandora_macros",
  "pandoranet",
  "serde",
  "serde_json",
  "simple_logger",
  "tokio",
+]
+
+[[package]]
+name = "pandora_macros"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "serde",
+ "serde_json",
+ "syn",
 ]
 
 [[package]]
