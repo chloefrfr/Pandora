@@ -1,8 +1,11 @@
+use std::io::Read;
+
 use bytes::{Buf, BufMut, BytesMut};
 use log::error;
-use nbt::Blob;
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
+
+use crate::types::varint_types::VarInt;
 
 pub struct PacketManager {
     buffer: BytesMut,
@@ -20,13 +23,62 @@ impl PacketManager {
         self.buffer.remaining() >= required
     }
 
-    #[inline(always)]
     pub fn read_boolean(&mut self) -> bool {
-        if self.ensure_available_bytes(1) {
-            self.read_byte() != 0
-        } else {
-            false
+        self.ensure_available_bytes(1) && self.read_byte() != 0
+    }
+
+    pub fn read_byte(&mut self) -> i8 {
+        self.buffer.get_i8()
+    }
+
+    pub fn read_unsigned_byte(&mut self) -> u8 {
+        self.buffer.get_u8()
+    }
+
+    pub fn read_short(&mut self) -> i16 {
+        self.buffer.get_i16()
+    }
+
+    pub fn read_unsigned_short(&mut self) -> u16 {
+        self.buffer.get_u16()
+    }
+
+    pub fn read_int(&mut self) -> i32 {
+        self.buffer.get_i32()
+    }
+
+    pub fn read_long(&mut self) -> i64 {
+        self.buffer.get_i64()
+    }
+
+    pub fn read_float(&mut self) -> f32 {
+        self.buffer.get_f32()
+    }
+
+    pub fn read_double(&mut self) -> f64 {
+        self.buffer.get_f64()
+    }
+
+    pub fn read_var_int<T>(&mut self, cursor: &mut T) -> Result<VarInt, String>
+    where
+        T: Read,
+    {
+        let mut result: i32 = 0;
+        let mut shift = 0;
+
+        for _ in 0..5 {
+            let mut byte = [0u8; 1];
+            cursor.read_exact(&mut byte).map_err(|e| e.to_string())?;
+            let byte = byte[0];
+
+            result |= ((byte & 0x7F) as i32) << shift;
+            if byte & 0x80 == 0 {
+                return Ok(VarInt::new(result));
+            }
+            shift += 7;
         }
+
+        Err("VarInt too long".to_string())
     }
 
     pub fn read_var_int_checked(&mut self) -> Option<i32> {
@@ -37,7 +89,7 @@ impl PacketManager {
             if self.ensure_available_bytes(1) {
                 let byte = self.read_unsigned_byte();
                 value |= ((byte & 0x7F) as i32) << shift;
-                if (byte & 0x80) == 0 {
+                if byte & 0x80 == 0 {
                     return Some(value);
                 }
                 shift += 7;
@@ -45,180 +97,67 @@ impl PacketManager {
                 return None;
             }
         }
+
         None
     }
 
-    #[inline(always)]
-    pub fn read_byte(&mut self) -> i8 {
-        if self.ensure_available_bytes(1) {
-            self.buffer.get_i8()
+    pub fn read_string(&mut self) -> Result<String, String> {
+        let length = self
+            .read_var_int_checked()
+            .ok_or_else(|| "Failed to read string length (VarInt)".to_string())?;
+
+        if self.ensure_available_bytes(length as usize) {
+            let slice = self.buffer.split_to(length as usize);
+            String::from_utf8(slice.to_vec()).map_err(|e| e.to_string())
         } else {
-            0
+            Err("Insufficient bytes available to read string".to_string())
         }
     }
 
-    pub fn read_float(&mut self) -> f32 {
-        if self.ensure_available_bytes(4) {
-            self.buffer.get_f32()
-        } else {
-            0.0
-        }
-    }
-
-    #[inline(always)]
-    pub fn read_unsigned_byte(&mut self) -> u8 {
-        if self.ensure_available_bytes(1) {
-            self.buffer.get_u8()
-        } else {
-            0
-        }
-    }
-
-    #[inline(always)]
-    pub fn read_short(&mut self) -> i16 {
-        if self.ensure_available_bytes(2) {
-            self.buffer.get_i16()
-        } else {
-            0
-        }
-    }
-
-    #[inline(always)]
-    pub fn read_unsigned_short(&mut self) -> u16 {
-        if self.ensure_available_bytes(2) {
-            self.buffer.get_u16()
-        } else {
-            0
-        }
-    }
-
-    #[inline(always)]
-    pub fn read_int(&mut self) -> i32 {
-        if self.ensure_available_bytes(4) {
-            self.buffer.get_i32()
-        } else {
-            0
-        }
-    }
-
-    #[inline(always)]
-    pub fn read_long(&mut self) -> i64 {
-        if self.ensure_available_bytes(8) {
-            self.buffer.get_i64()
-        } else {
-            0
-        }
-    }
-
-    pub fn read_var_int(&mut self) -> Result<i32, String> {
-        let mut result: i32 = 0;
-        let mut shift = 0;
-
-        for _i in 0..5 {
-            let byte = self.read_unsigned_byte();
-
-            let value = byte & 0x7f;
-
-            result |= (value as i32) << shift;
-
-            if byte & 0b10000000 == 0 {
-                return Ok(result);
-            }
-
-            shift += 7;
-            if shift > 63 {
-                return Err("VarInt too long".to_string());
-            }
-        }
-
-        Ok(result)
-    }
-
-    pub fn append_blob(&mut self, blob: &Blob) {
-        let serialized_blob = serde_json::to_vec(blob).unwrap();
-        let length = serialized_blob.len();
-
-        self.buffer.extend_from_slice(&serialized_blob);
-        self.add_offset(length, true);
-    }
-
-    pub fn read_double(&mut self) -> f64 {
-        if self.ensure_available_bytes(8) {
-            self.buffer.get_f64()
-        } else {
-            0.0
-        }
-    }
-    pub fn read_string(&mut self) -> String {
-        let length = match self.read_var_int() {
-            Ok(value) => value as usize,
-            Err(e) => {
-                eprintln!("Error reading VarInt: {}", e);
-                return String::new();
-            }
-        };
-
-        if self.ensure_available_bytes(length) {
-            let slice = self.buffer.split_to(length);
-            String::from_utf8(slice.to_vec()).unwrap_or_default()
-        } else {
-            String::new()
-        }
-    }
-
-    pub fn read_uuid(&mut self) -> String {
+    pub fn read_uuid(&mut self) -> Result<String, String> {
         let high = self.read_long();
         let low = self.read_long();
-        format!("{:016x}{:016x}", high, low)
+        Ok(format!("{:016x}{:016x}", high, low))
     }
 
-    #[inline(always)]
     pub fn write_boolean(&mut self, value: bool) {
         self.write_byte(if value { 1 } else { 0 });
     }
 
-    #[inline(always)]
     pub fn write_byte(&mut self, value: i8) {
         self.buffer.put_i8(value);
     }
 
-    #[inline(always)]
     pub fn write_unsigned_byte(&mut self, value: u8) {
         self.buffer.put_u8(value);
     }
 
-    #[inline(always)]
     pub fn write_short(&mut self, value: i16) {
         self.buffer.put_i16(value);
     }
 
-    #[inline(always)]
     pub fn write_unsigned_short(&mut self, value: u16) {
         self.buffer.put_u16(value);
     }
 
-    #[inline(always)]
-    pub fn write_double(&mut self, value: f64) {
-        self.buffer.put_f64(value);
-    }
-
-    #[inline(always)]
-    pub fn write_float(&mut self, value: f32) {
-        self.buffer.put_f32(value);
-    }
-
-    #[inline(always)]
     pub fn write_int(&mut self, value: i32) {
         self.buffer.put_i32(value);
     }
 
-    #[inline(always)]
     pub fn write_long(&mut self, value: BigInt) {
         if let Some(val) = value.to_i64() {
             self.buffer.put_i64(val);
         } else {
             error!("Failed to convert BigInt to i64");
         }
+    }
+
+    pub fn write_float(&mut self, value: f32) {
+        self.buffer.put_f32(value);
+    }
+
+    pub fn write_double(&mut self, value: f64) {
+        self.buffer.put_f64(value);
     }
 
     pub fn write_string(&mut self, value: &str) {
@@ -242,16 +181,21 @@ impl PacketManager {
         self.write_unsigned_byte(value as u8);
     }
 
-    pub fn write_uuid(&mut self, value: &str) {
+    pub fn write_uuid(&mut self, value: &str) -> Result<(), String> {
         let uuid = value.replace("-", "");
-        let high = u128::from_str_radix(&uuid[..16], 16).expect("Invalid UUID format");
-        let low = u128::from_str_radix(&uuid[16..], 16).expect("Invalid UUID format");
+        if uuid.len() != 32 {
+            return Err("Invalid UUID format".to_string());
+        }
+
+        let high = u128::from_str_radix(&uuid[..16], 16).map_err(|_| "Invalid UUID format")?;
+        let low = u128::from_str_radix(&uuid[16..], 16).map_err(|_| "Invalid UUID format")?;
         self.write_long((high as i64).into());
         self.write_long((low as i64).into());
+        Ok(())
     }
 
-    pub fn add_offset(&mut self, size: usize, retval: bool) -> usize {
-        if retval {
+    pub fn add_offset(&mut self, size: usize, update_offset: bool) -> usize {
+        if update_offset {
             self.offset += size;
             self.offset
         } else {
@@ -261,7 +205,6 @@ impl PacketManager {
         }
     }
 
-    #[inline(always)]
     pub fn build_packet(&mut self, id: i32) -> BytesMut {
         let mut pk_id = PacketManager::new(BytesMut::new(), 0);
         pk_id.write_var_int(id);

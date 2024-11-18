@@ -3,12 +3,10 @@ use networking::server::start_server;
 
 use std::time::Instant;
 
-pub mod chunks;
 pub mod config;
 pub mod constants;
 pub mod logger;
 pub mod networking;
-pub mod packets;
 
 #[tokio::main]
 async fn main() {

@@ -5,42 +5,42 @@ use quote::quote;
 use syn::{parse_macro_input, DeriveInput};
 
 #[proc_macro_derive(Decode)]
-pub fn derive_decode(input: TokenStream) -> TokenStream {
-    let parsed_input = parse_macro_input!(input as DeriveInput);
-
-    let mut field_assignments = Vec::new();
+pub fn decode_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let mut field_statements = Vec::new();
 
     if let syn::Data::Struct(syn::DataStruct {
         fields: syn::Fields::Named(fields),
         ..
-    }) = parsed_input.data
+    }) = input.data
     {
         for field in fields.named {
-            let field_name = field.ident.unwrap();
-            let field_type = &field.ty;
+            let ident = field.ident.unwrap();
+            let type_name = field.ty;
 
-            let assignment = quote! {
-                #field_name: #field_type::decode(bytes)?,
+            let statement = quote! {
+                #ident: match <#type_name as Decode>::decode(bytes) {
+                    Ok(value) => value,
+                    Err(e) => {
+                        eprintln!("Decode error in field '{}': {:?}", stringify!(#ident), e);
+                        return Err(e.into());
+                    },
+                },
             };
-            field_assignments.push(assignment);
+            field_statements.push(statement);
         }
-    } else {
-        return quote! {
-            compile_error!("Decode can only be derived for structs with named fields.");
-        }
-        .into();
     }
 
-    let struct_name = parsed_input.ident;
+    let name = input.ident;
 
     let expanded = quote! {
-        impl #struct_name {
-            pub fn decode<R>(bytes: &mut R) -> Result<Self, Box<dyn std::error::Error>>
+        impl #name {
+            pub fn decode<T>(bytes: &mut T) -> Result<Self, Box<dyn std::error::Error>>
             where
-                R: Read,
+                T: std::io::Read,
             {
                 Ok(Self {
-                    #(#field_assignments)*
+                    #(#field_statements)*
                 })
             }
         }
