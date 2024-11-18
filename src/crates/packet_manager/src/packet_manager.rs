@@ -1,9 +1,8 @@
-use std::io::Read;
-
 use bytes::{Buf, BufMut, BytesMut};
 use log::error;
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
+use tokio::io::AsyncReadExt;
 
 use crate::types::varint_types::VarInt;
 
@@ -23,71 +22,77 @@ impl PacketManager {
         self.buffer.remaining() >= required
     }
 
-    pub fn read_boolean(&mut self) -> bool {
-        self.ensure_available_bytes(1) && self.read_byte() != 0
+    pub async fn read_boolean(&mut self) -> bool {
+        self.ensure_available_bytes(1) && self.read_byte().await != 0
     }
 
-    pub fn read_byte(&mut self) -> i8 {
+    pub async fn read_byte(&mut self) -> i8 {
         self.buffer.get_i8()
     }
 
-    pub fn read_unsigned_byte(&mut self) -> u8 {
+    pub async fn read_unsigned_byte(&mut self) -> u8 {
         self.buffer.get_u8()
     }
 
-    pub fn read_short(&mut self) -> i16 {
+    pub async fn read_short(&mut self) -> i16 {
         self.buffer.get_i16()
     }
 
-    pub fn read_unsigned_short(&mut self) -> u16 {
+    pub async fn read_unsigned_short(&mut self) -> u16 {
         self.buffer.get_u16()
     }
 
-    pub fn read_int(&mut self) -> i32 {
+    pub async fn read_int(&mut self) -> i32 {
         self.buffer.get_i32()
     }
 
-    pub fn read_long(&mut self) -> i64 {
+    pub async fn read_long(&mut self) -> i64 {
         self.buffer.get_i64()
     }
 
-    pub fn read_float(&mut self) -> f32 {
+    pub async fn read_float(&mut self) -> f32 {
         self.buffer.get_f32()
     }
 
-    pub fn read_double(&mut self) -> f64 {
+    pub async fn read_double(&mut self) -> f64 {
         self.buffer.get_f64()
     }
 
-    pub fn read_var_int<T>(&mut self, cursor: &mut T) -> Result<VarInt, String>
+    pub async fn read_var_int<T>(cursor: &mut T) -> Result<VarInt, String>
     where
-        T: Read,
+        T: tokio::io::AsyncRead + tokio::io::AsyncSeek + Unpin,
     {
         let mut result: i32 = 0;
-        let mut shift = 0;
 
-        for _ in 0..5 {
+        let mut cursor = Box::pin(cursor);
+
+        for i in 0..5 {
             let mut byte = [0u8; 1];
-            cursor.read_exact(&mut byte).map_err(|e| e.to_string())?;
+            cursor
+                .read_exact(&mut byte)
+                .await
+                .map_err(|e| e.to_string())?;
             let byte = byte[0];
 
-            result |= ((byte & 0x7F) as i32) << shift;
-            if byte & 0x80 == 0 {
-                return Ok(VarInt::new(result));
+            result |= ((byte as i32) & 0b01111111) << (i * 7);
+            if byte & 0b10000000 == 0 {
+                return Ok(VarInt {
+                    value: result,
+                    len: i + 1,
+                });
             }
-            shift += 7;
         }
 
         Err("VarInt too long".to_string())
     }
 
-    pub fn read_var_int_checked(&mut self) -> Option<i32> {
+    pub async fn read_var_int_checked(&mut self) -> Option<i32> {
         let mut value = 0;
         let mut shift = 0;
 
         for _ in 0..5 {
             if self.ensure_available_bytes(1) {
-                let byte = self.read_unsigned_byte();
+                let byte = self.read_unsigned_byte().await;
                 value |= ((byte & 0x7F) as i32) << shift;
                 if byte & 0x80 == 0 {
                     return Some(value);
@@ -101,9 +106,10 @@ impl PacketManager {
         None
     }
 
-    pub fn read_string(&mut self) -> Result<String, String> {
+    pub async fn read_string(&mut self) -> Result<String, String> {
         let length = self
             .read_var_int_checked()
+            .await
             .ok_or_else(|| "Failed to read string length (VarInt)".to_string())?;
 
         if self.ensure_available_bytes(length as usize) {
@@ -114,9 +120,9 @@ impl PacketManager {
         }
     }
 
-    pub fn read_uuid(&mut self) -> Result<String, String> {
-        let high = self.read_long();
-        let low = self.read_long();
+    pub async fn read_uuid(&mut self) -> Result<String, String> {
+        let high = self.read_long().await;
+        let low = self.read_long().await;
         Ok(format!("{:016x}{:016x}", high, low))
     }
 

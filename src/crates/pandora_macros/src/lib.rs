@@ -35,9 +35,9 @@ pub fn decode_derive(input: TokenStream) -> TokenStream {
 
     let expanded = quote! {
         impl #name {
-            pub fn decode<T>(bytes: &mut T) -> Result<Self, Box<dyn std::error::Error>>
+            pub async fn decode<T>(bytes: &mut T) -> Result<Self, Box<dyn std::error::Error>>
             where
-                T: std::io::Read,
+                T: AsyncRead + AsyncSeek + Unpin,
             {
                 Ok(Self {
                     #(#field_statements)*
