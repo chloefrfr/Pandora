@@ -1,6 +1,6 @@
-use crate::utils::send_status_response::send_status_response;
 use log::info;
 use packet_manager::{PacketHandler, PacketManager};
+use pandora_utils::responses::send_status_response::send_status_response;
 use std::sync::Arc;
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
@@ -26,12 +26,12 @@ impl PacketHandler for HandshakePacket {
         let _server_port = packet.read_unsigned_short();
         let next_state = packet.read_var_int();
 
-        *state = next_state;
+        *state = next_state.unwrap();
         info!("State updated to: {}", state);
 
         if *state == 1 {
             tokio::spawn(async move {
-                send_status_response(&socket, 10).await;
+                send_status_response(&socket, 100).await;
             });
         }
 

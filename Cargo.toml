@@ -22,3 +22,4 @@ num-traits = "0.2"
 pandoranet = { path = "src/crates/pandoranet" }
 packet_manager = { path = "src/crates/packet_manager" }
 pandora_macros = { path = "src/crates/pandora_macros" }
+pandora_utils = { path = "src/crates/pandora_utils" }

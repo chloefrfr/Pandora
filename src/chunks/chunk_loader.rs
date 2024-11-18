@@ -31,8 +31,8 @@ impl ChunkLoader {
         chunk_data_packet.append(&BytesMut::from(&(x as i32).to_be_bytes()[..]));
         chunk_data_packet.append(&BytesMut::from(&(z as i32).to_be_bytes()[..]));
 
-        chunk.read_var_int();
-        chunk.read_var_int();
+        let _ = chunk.read_var_int();
+        let _ = chunk.read_var_int();
         chunk.read_int();
         chunk.read_int();
 

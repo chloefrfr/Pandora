@@ -1,5 +1,6 @@
 use log::{error, info};
 use networking::server::start_server;
+
 use std::time::Instant;
 
 pub mod chunks;
@@ -8,7 +9,6 @@ pub mod constants;
 pub mod logger;
 pub mod networking;
 pub mod packets;
-pub mod utils;
 
 #[tokio::main]
 async fn main() {

@@ -110,23 +110,28 @@ impl PacketManager {
         }
     }
 
-    pub fn read_var_int(&mut self) -> i32 {
-        let mut value = 0;
+    pub fn read_var_int(&mut self) -> Result<i32, String> {
+        let mut result: i32 = 0;
         let mut shift = 0;
 
-        for _ in 0..5 {
-            if self.ensure_available_bytes(1) {
-                let byte = self.read_unsigned_byte();
-                value |= ((byte & 0x7F) as i32) << shift;
-                if (byte & 0x80) == 0 {
-                    return value;
-                }
-                shift += 7;
-            } else {
-                return 0;
+        for _i in 0..5 {
+            let byte = self.read_unsigned_byte();
+
+            let value = byte & 0x7f;
+
+            result |= (value as i32) << shift;
+
+            if byte & 0b10000000 == 0 {
+                return Ok(result);
+            }
+
+            shift += 7;
+            if shift > 63 {
+                return Err("VarInt too long".to_string());
             }
         }
-        0
+
+        Ok(result)
     }
 
     pub fn append_blob(&mut self, blob: &Blob) {
@@ -144,9 +149,15 @@ impl PacketManager {
             0.0
         }
     }
-
     pub fn read_string(&mut self) -> String {
-        let length = self.read_var_int() as usize;
+        let length = match self.read_var_int() {
+            Ok(value) => value as usize,
+            Err(e) => {
+                eprintln!("Error reading VarInt: {}", e);
+                return String::new();
+            }
+        };
+
         if self.ensure_available_bytes(length) {
             let slice = self.buffer.split_to(length);
             String::from_utf8(slice.to_vec()).unwrap_or_default()
