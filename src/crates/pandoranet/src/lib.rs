@@ -71,7 +71,7 @@ impl Connection {
                     ()
                 });
 
-            if let Ok(conn) = conn {
+            if let Ok(_) = conn {
                 Connection::start_sender(socket_clone_for_sender, recv_rx).await;
             }
         });

@@ -26,6 +26,7 @@ impl VarInt {
     pub fn length(&self) -> usize {
         self.len
     }
+
 }
 
 impl Display for VarInt {

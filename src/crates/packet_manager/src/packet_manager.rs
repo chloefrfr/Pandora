@@ -134,6 +134,17 @@ impl PacketManager {
         self.buffer.put_i8(value);
     }
 
+    pub fn write_var_int(&mut self, value: &VarInt) {
+        let value_i32 = value.to_i32(); // Convert VarInt to i32
+
+        let mut value = value_i32;
+        while value & !0x7F != 0 {
+            self.write_unsigned_byte((value & 0x7F) as u8 | 0x80);
+            value >>= 7;
+        }
+        self.write_unsigned_byte(value as u8);
+    }
+
     pub fn write_unsigned_byte(&mut self, value: u8) {
         self.buffer.put_u8(value);
     }
@@ -167,11 +178,11 @@ impl PacketManager {
     }
 
     pub fn write_string(&mut self, value: &str) {
-        self.write_var_int(value.len() as i32);
+        self.write_var_int_checked(value.len() as i32);
         self.buffer.extend_from_slice(value.as_bytes());
     }
 
-    pub fn write_var_int(&mut self, mut value: i32) {
+    pub fn write_var_int_checked(&mut self, mut value: i32) {
         while value & !0x7F != 0 {
             self.write_unsigned_byte((value & 0x7F) as u8 | 0x80);
             value >>= 7;
@@ -213,10 +224,10 @@ impl PacketManager {
 
     pub fn build_packet(&mut self, id: i32) -> BytesMut {
         let mut pk_id = PacketManager::new(BytesMut::new(), 0);
-        pk_id.write_var_int(id);
+        pk_id.write_var_int_checked(id);
 
-        let mut pk_length = PacketManager::new(BytesMut::new(), 0);
-        pk_length.write_var_int(pk_id.buffer.len() as i32 + self.buffer.len() as i32);
+        let mut pk_length: PacketManager = PacketManager::new(BytesMut::new(), 0);
+        pk_length.write_var_int_checked(pk_id.buffer.len() as i32 + self.buffer.len() as i32);
 
         let mut pk = BytesMut::with_capacity(
             pk_length.buffer.len() + pk_id.buffer.len() + self.buffer.len(),

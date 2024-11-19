@@ -14,7 +14,7 @@ pub async fn send_player_position(
     position_packet.write_float(0.0);
     position_packet.write_float(0.0);
     position_packet.write_byte(0);
-    position_packet.write_var_int(0);
+    position_packet.write_var_int_checked(0);
 
     socket
         .lock()
