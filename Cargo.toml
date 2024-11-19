@@ -17,6 +17,8 @@ aes = "0.8.4"
 flate2 = "1.0.25"
 num-bigint = "0.4"
 num-traits = "0.2"
+chrono = "0.4.26"
+env_logger = "0.11.5"
 
 # Custom crates
 pandoranet = { path = "src/crates/pandoranet" }

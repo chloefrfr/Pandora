@@ -33,3 +33,22 @@ cargo build --release
 ```bash
 ./target/release/pandora
 ```
+
+### Configuring Log Levels
+
+Pandora uses a flexable logging system to control the verbosity of logs output to the terminal. By default, the log level is set to `Info`, which means that all logs will be displayed.
+
+### Available Log Levels
+
+- `Error`: Only logs error messages.
+- `Warn`: Logs warnings and errors.
+- `Info`: Logs informational messages, warnings, and errors.
+- `Debug`: Logs debug information, informational messages, warnings, and errors.
+
+#### Setting Log Levels
+
+You can set the log level by passing the `--log-level` argument to the server.
+
+```bash
+./target/release/pandora --log-level=Debug
+```
