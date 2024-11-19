@@ -1,8 +1,9 @@
-use crate::config::Config;
 use log::info;
 use tokio::net::TcpListener;
 
-pub async fn start_server(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
+use crate::config::Config;
+
+pub async fn start_server(config: &Config) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let addr = format!("{}:{}", config.host, config.port);
     let listener = TcpListener::bind(&addr).await?;
     info!("Server listening on {}", addr);
@@ -10,8 +11,6 @@ pub async fn start_server(config: &Config) -> Result<(), Box<dyn std::error::Err
     loop {
         let (socket, _) = listener.accept().await.unwrap();
 
-        tokio::spawn(async move {
-            pandoranet::handle_connection(socket).await.unwrap();
-        });
+        pandoranet::handle_connection(socket).await.unwrap();
     }
 }

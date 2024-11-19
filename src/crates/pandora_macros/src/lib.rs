@@ -19,8 +19,8 @@ pub fn decode_derive(input: TokenStream) -> TokenStream {
             let type_name = field.ty;
 
             let statement = quote! {
-                #ident: match <#type_name as Decode>::decode(bytes) {
-                    Ok(value) => value,
+                #ident: match <#type_name as Decode>::decode(bytes).await {
+                    Ok(value) => *value,
                     Err(e) => {
                         eprintln!("Decode error in field '{}': {:?}", stringify!(#ident), e);
                         return Err(e.into());
@@ -42,6 +42,46 @@ pub fn decode_derive(input: TokenStream) -> TokenStream {
                 Ok(Self {
                     #(#field_statements)*
                 })
+            }
+        }
+    };
+
+    TokenStream::from(expanded)
+}
+
+#[proc_macro_derive(Encode)]
+pub fn encode_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = &input.ident;
+
+    let field_statements = if let syn::Data::Struct(syn::DataStruct {
+        fields: syn::Fields::Named(fields),
+        ..
+    }) = input.data
+    {
+        fields
+            .named
+            .iter()
+            .map(|field| {
+                let ident = &field.ident;
+                let ty = &field.ty;
+                quote! {
+                    <#ty as Encode>::encode(&self.#ident, bytes).await?;
+                }
+            })
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+
+    let expanded = quote! {
+        impl #name {
+            pub async fn encode<T>(&self, bytes: &mut T) -> core::result::Result<(), Error>
+            where
+                T: AsyncWrite + AsyncSeek + Unpin,
+            {
+                #(#field_statements)*
+                Ok(())
             }
         }
     };
