@@ -1,6 +1,6 @@
 use dashmap::DashMap;
 use lazy_static::lazy_static;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use packet_manager::PacketManager;
 use rand::random;
 use std::{
@@ -71,7 +71,7 @@ impl Connection {
                     ()
                 });
 
-            if let Ok(mut conn) = conn {
+            if let Ok(conn) = conn {
                 Connection::start_sender(socket_clone_for_sender, recv_rx).await;
             }
         });
@@ -90,43 +90,41 @@ impl Connection {
                 socket.lock().await.write_all(&packet).await.unwrap();
             }
 
-            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
     }
 
     async fn start_receiver(
         socket: Arc<Mutex<TcpStream>>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        loop {
-            let mut buf_length = vec![0u8; 1];
-            socket.lock().await.read_exact(&mut buf_length).await?;
+        let mut socket = socket.lock().await;
 
-            let length = buf_length[0] as usize;
+        let mut length_buffer = [0u8; 1];
+        socket.read_exact(&mut length_buffer).await?;
+        let length = length_buffer[0] as usize;
 
-            let mut buffer = vec![0u8; length];
-            socket.lock().await.read_exact(&mut buffer).await?;
+        let mut buffer = vec![0u8; length];
+        socket.read_exact(&mut buffer).await?;
 
-            let combined_buffer = [buf_length, buffer].concat();
-            let mut cursor = Cursor::new(&combined_buffer);
+        let mut cursor = Cursor::new([length_buffer.to_vec(), buffer].concat());
 
-            let packet_id = PacketManager::read_var_int(&mut cursor).await.unwrap();
-            let packet_length = PacketManager::read_var_int(&mut cursor).await.unwrap();
+        let packet_length = PacketManager::read_var_int(&mut cursor).await?;
+        let packet_id = PacketManager::read_var_int(&mut cursor).await?;
 
-            info!(
-                "Received packet with id {} and length {}",
-                packet_id, packet_length
-            );
-
-            match packet_id.to_i32() {
-                0x00 => {
-                    let handshake_packet = HandshakePacket::decode(&mut cursor).await.unwrap();
-                    info!("Handshake packet: {:?}", handshake_packet);
-                }
-                _ => {
-                    warn!("Received packet with unknown id {}", packet_id);
-                }
+        match packet_id.to_i32() {
+            0x00 => {
+                let handshake_packet = HandshakePacket::decode(&mut cursor).await.unwrap();
+                debug!("{}", handshake_packet);
+            }
+            _ => {
+                warn!(
+                    "Unknown packet id {} with length {}",
+                    packet_id, packet_length
+                );
             }
         }
+
+        Ok(())
     }
 }
 
