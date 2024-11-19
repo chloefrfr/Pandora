@@ -8,6 +8,12 @@ proc-macro = true
 
 [dependencies]
 quote = "1.0.21"
-syn = "2.0.87"
+syn = "2.0.17"
 serde_json = "1.0.91"
+tokio = { version = "1.28.2", features = ["full"] }
 serde = { version = "1.0.152", features = ["derive"] }
+bytes = "1.4.0"
+log = "0.4.17"
+
+# Custom crates
+packet_manager = { path = "../packet_manager" }

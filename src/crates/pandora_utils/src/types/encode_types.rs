@@ -1,5 +1,4 @@
-use bytes::BytesMut;
-use packet_manager::{types::varint_types::VarInt, PacketManager};
+use packet_manager::types::varint_types::VarInt;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 pub trait Encode {
@@ -117,12 +116,8 @@ impl Encode for VarInt {
     where
         T: AsyncWrite + Unpin,
     {
-        let buffer = Vec::new();
-        let mut packet_manager = PacketManager::new(BytesMut::from(&buffer[..]), 0);
-        packet_manager.write_var_int_checked(self.value);
-
-        bytes.write_all(&buffer).await?;
-
-        Ok(())
+        bytes.write_all(&self.to_be_bytes()).await.map_err(|_| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, "Failed to write VarInt")
+        })
     }
 }

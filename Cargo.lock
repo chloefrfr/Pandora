@@ -433,6 +433,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "lariv"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28a97c501f6b03c8f4a8d8aab5998af39c897613747409fd11e164dce97b63e9"
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -589,10 +595,14 @@ dependencies = [
 name = "pandora_macros"
 version = "0.1.0"
 dependencies = [
+ "bytes",
+ "log",
+ "packet_manager",
  "quote",
  "serde",
  "serde_json",
  "syn",
+ "tokio",
 ]
 
 [[package]]
@@ -615,6 +625,7 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "dashmap",
+ "lariv",
  "lazy_static",
  "log",
  "packet_manager",

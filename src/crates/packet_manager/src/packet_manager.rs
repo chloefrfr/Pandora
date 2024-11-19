@@ -135,7 +135,7 @@ impl PacketManager {
     }
 
     pub fn write_var_int(&mut self, value: &VarInt) {
-        let value_i32 = value.to_i32(); // Convert VarInt to i32
+        let value_i32 = value.to_i32();
 
         let mut value = value_i32;
         while value & !0x7F != 0 {

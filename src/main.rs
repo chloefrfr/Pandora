@@ -1,3 +1,5 @@
+#![feature(box_into_inner)]
+
 use log::{error, info};
 use networking::server::start_server;
 

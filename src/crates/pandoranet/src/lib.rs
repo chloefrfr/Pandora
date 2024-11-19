@@ -1,3 +1,5 @@
+#![feature(box_into_inner)]
+
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 use log::{debug, error, info, warn};
@@ -29,8 +31,9 @@ pub struct Connection {
     pub id: u32,
     pub socket: Arc<Mutex<TcpStream>>,
     pub player_uuid: Option<Uuid>,
-    pub send_queue: mpsc::Sender<Vec<u8>>,
-    pub recv_queue: Arc<Mutex<mpsc::Receiver<Vec<u8>>>>,
+    pub send_queue_sender: mpsc::Sender<Vec<u8>>,
+    pub send_queue_receiver: Arc<Mutex<mpsc::Receiver<Vec<u8>>>>,
+    pub state: ConnectionState,
 }
 
 impl Connection {
@@ -43,92 +46,116 @@ impl Connection {
         mpsc::Sender<Vec<u8>>,
         Arc<Mutex<mpsc::Receiver<Vec<u8>>>>,
     ) {
-        let (send_tx, _send_rx) = mpsc::channel(1024);
-        let (_recv_tx, recv_rx) = mpsc::channel(1024);
+        let (send_queue_sender, send_queue_receiver) = mpsc::channel::<Vec<u8>>(100);
 
         let connection = Connection {
             id,
             socket: Arc::new(Mutex::new(socket)),
             player_uuid,
-            send_queue: send_tx.clone(),
-            recv_queue: Arc::new(Mutex::new(recv_rx)),
+            send_queue_sender,
+            send_queue_receiver: Arc::new(Mutex::new(send_queue_receiver)),
+            state: ConnectionState::Unknown,
         };
 
         let connection = Arc::new(connection);
 
-        (connection.clone(), send_tx, connection.recv_queue.clone())
+        (
+            connection.clone(),
+            connection.send_queue_sender.clone(),
+            connection.send_queue_receiver.clone(),
+        )
     }
 
-    pub async fn start_connection(&self, recv_rx: Arc<Mutex<mpsc::Receiver<Vec<u8>>>>) {
-        let arc_id = Arc::new(self.id.clone());
-        let socket_clone_for_sender: Arc<Mutex<TcpStream>> = self.socket.clone();
-        tokio::spawn(async move {
-            let conn = CONNECTION_MANAGER
-                .connections
-                .get_mut(&*arc_id)
-                .ok_or_else(|| {
-                    error!("Connection not found");
-                    ()
-                });
+    pub async fn start_connection(&mut self) {
+        self.state = ConnectionState::Handshake;
+        let arc_id = Arc::new(self.id);
 
-            if let Ok(_) = conn {
-                Connection::start_sender(socket_clone_for_sender, recv_rx).await;
+        tokio::spawn(async move {
+            let conn = CONNECTION_MANAGER.connections.get_mut(&*arc_id);
+
+            let Some(mut conn) = conn else {
+                error!("Connection not found for id: {}", *arc_id);
+                return;
+            };
+
+            let res = conn.start_sender().await;
+
+            if let Err(e) = res {
+                error!("Error in sender: {:?}", e);
             }
         });
 
-        if let Err(e) = Connection::start_receiver(self.socket.clone()).await {
+        if let Err(e) = Connection::start_receiver(self, self.socket.clone()).await {
             error!("Receiver task failed with error: {}", e);
         }
     }
 
-    async fn start_sender(
-        socket: Arc<Mutex<TcpStream>>,
-        recv_rx: Arc<Mutex<mpsc::Receiver<Vec<u8>>>>,
-    ) {
+    async fn start_sender(&mut self) -> Result<(), std::io::Error> {
         loop {
-            while let Some(packet) = recv_rx.lock().await.recv().await {
-                socket.lock().await.write_all(&packet).await.unwrap();
+            match self.send_queue_receiver.lock().await.recv().await {
+                Some(packet) => {
+                    if let Err(e) = self.socket.lock().await.write_all(&packet).await {
+                        error!("Failed to write to socket: {:?}", e);
+                        break;
+                    }
+                }
+                None => {}
             }
-
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
+        Ok(())
     }
 
     async fn start_receiver(
+        &mut self,
         socket: Arc<Mutex<TcpStream>>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut socket = socket.lock().await;
 
-        let mut length_buffer = [0u8; 1];
-        socket.read_exact(&mut length_buffer).await?;
-        let length = length_buffer[0] as usize;
-
-        let mut buffer = vec![0u8; length];
-        socket.read_exact(&mut buffer).await?;
-
-        let mut cursor = Cursor::new([length_buffer.to_vec(), buffer].concat());
-
-        let packet_length = PacketManager::read_var_int(&mut cursor).await?;
-        let packet_id = PacketManager::read_var_int(&mut cursor).await?;
-
-        match packet_id.to_i32() {
-            0x00 => {
-                let handshake_packet = HandshakePacket::decode(&mut cursor).await.unwrap();
-                debug!("{}", handshake_packet);
+        loop {
+            let mut length_buffer = [0u8; 1];
+            if socket.read_exact(&mut length_buffer).await.is_err() {
+                error!("Failed to read packet length.");
+                break;
             }
-            _ => {
-                warn!(
-                    "Unknown packet id {} with length {}",
-                    packet_id, packet_length
-                );
+
+            let length = length_buffer[0] as usize;
+            let mut buffer = vec![0u8; length];
+
+            if socket.read_exact(&mut buffer).await.is_err() {
+                error!("Failed to read packet data.");
+                break;
+            }
+
+            let mut cursor = Cursor::new([length_buffer.to_vec(), buffer].concat());
+
+            let packet_length = PacketManager::read_var_int(&mut cursor).await?;
+            let packet_id = PacketManager::read_var_int(&mut cursor).await?;
+
+            match packet_id.to_i32() {
+                0x00 => {
+                    let handshake_packet = HandshakePacket::decode(&mut cursor).await.unwrap();
+                    debug!("{}", handshake_packet);
+                    handshake_packet.handle(self).await?;
+                }
+                _ => {
+                    warn!(
+                        "Unknown packet id {} with length {}",
+                        packet_id, packet_length
+                    );
+                }
             }
         }
-
         Ok(())
+    }
+
+    pub async fn push_to_queue(&self, packet: Vec<u8>) {
+        if let Err(e) = self.send_queue_sender.send(packet).await {
+            error!("Failed to send packet to queue: {:?}", e);
+        }
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum ConnectionState {
     Unknown,
     Handshake,
@@ -140,8 +167,6 @@ pub enum ConnectionState {
 pub struct ConnectionManager {
     pub connections: DashMap<u32, Connection>,
     pub connection_count: AtomicU32,
-    pub send_queue: Vec<Vec<u8>>,
-    pub state: ConnectionState,
 }
 
 impl ConnectionManager {
@@ -149,8 +174,6 @@ impl ConnectionManager {
         Self {
             connections: DashMap::new(),
             connection_count: AtomicU32::new(0),
-            state: ConnectionState::Unknown,
-            send_queue: Vec::new(),
         }
     }
 
@@ -177,17 +200,16 @@ impl ConnectionManager {
 
 pub async fn handle_connection(socket: TcpStream) -> Result<(), Box<dyn std::error::Error>> {
     let id = CONNECTION_MANAGER.generate_id();
-    let (connection, _send_queue, recv_queue) = Connection::new(socket, id, None);
+    let (connection, _send_queue_sender, _send_queue_receiver) = Connection::new(socket, id, None);
 
     CONNECTION_MANAGER.add_connection((*connection).clone());
 
-    let connection_ref = CONNECTION_MANAGER
+    let mut connection_ref = CONNECTION_MANAGER
         .connections
         .get_mut(&id)
         .ok_or("Connection not found")?;
 
-    connection_ref.start_connection(recv_queue).await;
-
+    connection_ref.start_connection().await;
     info!("Established connection with the id {}", id);
 
     Ok(())

@@ -11,12 +11,12 @@ uuid = { version = "1.4.1", features = ["v4"] }
 rand = "0.8.5"
 serde_json = "1.0.81"
 log = "0.4.17"
-bytes = "1.4.0"
+bytes = "1.1"
+lariv = "0.3.2"
+
 
 # Custom crates
 pandora_utils = { path = "../pandora_utils" }
 pandora_macros = { path = "../pandora_macros" }
 packet_manager = { path = "../packet_manager" }
 
-[features]
-default = []

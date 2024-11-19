@@ -27,6 +27,15 @@ impl VarInt {
         self.len
     }
 
+    pub fn to_be_bytes(&self) -> [u8; 5] {
+        let mut buf = [0u8; 5];
+        buf[0] = (self.value & 0x000000FF) as u8;
+        buf[1] = ((self.value & 0x0000FF00) >> 8) as u8;
+        buf[2] = ((self.value & 0x00FF0000) >> 16) as u8;
+        buf[3] = ((self.value & 0xFF000000u32 as i32) >> 24) as u8;
+        buf[4] = ((self.value & 0xFF000000u32 as i32) >> 24) as u8;
+        buf
+    }
 }
 
 impl Display for VarInt {
@@ -35,26 +44,20 @@ impl Display for VarInt {
     }
 }
 
+impl From<VarInt> for i32 {
+    fn from(varint: VarInt) -> i32 {
+        varint.value
+    }
+}
+
 impl From<i32> for VarInt {
-    fn from(value: i32) -> Self {
-        Self { value, len: 0 }
+    fn from(value: i32) -> VarInt {
+        VarInt::new(value)
     }
 }
 
 impl Into<usize> for VarInt {
     fn into(self) -> usize {
         self.value as usize
-    }
-}
-
-impl From<VarInt> for i32 {
-    fn from(value: VarInt) -> Self {
-        value.value
-    }
-}
-
-impl From<VarInt> for u32 {
-    fn from(value: VarInt) -> Self {
-        value.value as u32
     }
 }
